@@ -1,16 +1,15 @@
-from keep_alive import keep_alive
 import discord
 from discord.ext import commands, tasks
 import requests
 from bs4 import BeautifulSoup
+import os
 
-TOKEN = 'MTM2NjQwNjQ3ODYwODQ2NjA0MA.G9cBUr.gEumdg8tTzmKHVQyTqNf34Vtr5dPqprViBfe4w'  # Ton token Discord ici
-CHANNEL_ID = 1215440877816647721  # ID de ton salon Discord
+TOKEN = os.getenv("TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
 intents = discord.Intents.default()
 intents.message_content = True
-
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 known_products = []
 
@@ -20,75 +19,68 @@ headers = {
 
 @bot.event
 async def on_ready():
-    print(f'Connecté en tant que {bot.user}')
+    print(f"✅ Bot connecté en tant que {bot.user}")
     check_preorders.start()
 
 @tasks.loop(minutes=1)
 async def check_preorders():
     channel = bot.get_channel(CHANNEL_ID)
 
-    # Scraper Cultura
+    # Cultura
     cultura_url = "https://www.cultura.com/jeux-jouets/jeux-de-cartes/pokemon.html"
-    response_cultura = requests.get(cultura_url)
+    response_cultura = requests.get(cultura_url, headers=headers)
     soup_cultura = BeautifulSoup(response_cultura.text, "html.parser")
     cultura_products = soup_cultura.find_all('a', class_="product-item-link")
 
     for product in cultura_products:
         title = product.get_text(strip=True)
         link = product['href']
-        if "précommande" in title.lower() or "pré-commande" in title.lower():
-            if title not in known_products:
-                known_products.append(title)
-                embed = discord.Embed(
-                    title="Nouvelle Précommande Pokémon TCG sur Cultura",
-                    description=f"**{title}**\n[Voir le produit]({link})",
-                    color=discord.Color.blue()
-                )
-                await channel.send(embed=embed)
+        if "précommande" in title.lower() and title not in known_products:
+            known_products.append(title)
+            embed = discord.Embed(
+                title="Précommande Pokémon - Cultura",
+                description=f"{title}\n[Voir le produit]({link})",
+                color=discord.Color.blue()
+            )
+            await channel.send(embed=embed)
 
-    # Scraper Fnac
+    # Fnac
     fnac_url = "https://www.fnac.com/SearchResult/ResultList.aspx?SCat=0%211&Search=Pokemon+cartes+sous-blister"
-    response_fnac = requests.get(fnac_url)
+    response_fnac = requests.get(fnac_url, headers=headers)
     soup_fnac = BeautifulSoup(response_fnac.text, "html.parser")
     fnac_products = soup_fnac.find_all('a', class_="Article-desc")
 
     for product in fnac_products:
         title = product.get_text(strip=True)
-        link = product['href']
-        full_link = f"https://www.fnac.com{link}"
+        link = "https://www.fnac.com" + product['href']
+        if "précommande" in title.lower() and title not in known_products:
+            known_products.append(title)
+            embed = discord.Embed(
+                title="Précommande Pokémon - Fnac",
+                description=f"{title}\n[Voir le produit]({link})",
+                color=discord.Color.red()
+            )
+            await channel.send(embed=embed)
 
-        if "précommande" in title.lower() or "pré-commande" in title.lower():
-            if title not in known_products:
-                known_products.append(title)
-                embed = discord.Embed(
-                    title="Nouvelle Précommande Pokémon TCG sur Fnac",
-                    description=f"**{title}**\n[Voir le produit]({full_link})",
-                    color=discord.Color.red()
-                )
-                await channel.send(embed=embed)
-
-    # Scraper Micromania
-    micromania_url = "https://www.micromania.fr/search.html?query=pokemon%20cartes"
-    response_micro = requests.get(micromania_url)
+    # Micromania
+    micro_url = "https://www.micromania.fr/search.html?query=pokemon%20cartes"
+    response_micro = requests.get(micro_url, headers=headers)
     soup_micro = BeautifulSoup(response_micro.text, "html.parser")
     micro_products = soup_micro.find_all('a', class_="product-item-link")
 
     for product in micro_products:
         title = product.get_text(strip=True)
-        link = product['href']
-        full_link = f"https://www.micromania.fr{link}"
+        link = "https://www.micromania.fr" + product['href']
+        if "précommande" in title.lower() and title not in known_products:
+            known_products.append(title)
+            embed = discord.Embed(
+                title="Précommande Pokémon - Micromania",
+                description=f"{title}\n[Voir le produit]({link})",
+                color=discord.Color.green()
+            )
+            await channel.send(embed=embed)
 
-        if "précommande" in title.lower() or "pré-commande" in title.lower():
-            if title not in known_products:
-                known_products.append(title)
-                embed = discord.Embed(
-                    title="Nouvelle Précommande Pokémon TCG sur Micromania",
-                    description=f"**{title}**\n[Voir le produit]({full_link})",
-                    color=discord.Color.green()
-                )
-                await channel.send(embed=embed)
-
-    # Scraper Amazon
+    # Amazon
     amazon_url = "https://www.amazon.fr/s?k=cartes+pokemon+précommande"
     response_amazon = requests.get(amazon_url, headers=headers)
     soup_amazon = BeautifulSoup(response_amazon.text, "html.parser")
@@ -96,19 +88,16 @@ async def check_preorders():
 
     for product in amazon_products:
         title = product.get_text(strip=True)
-        link_element = product.find_parent('a')
+        link_element = product.find_parent("a")
         if link_element:
             link = "https://www.amazon.fr" + link_element['href']
+            if "précommande" in title.lower() and title not in known_products:
+                known_products.append(title)
+                embed = discord.Embed(
+                    title="Précommande Pokémon - Amazon",
+                    description=f"{title}\n[Voir le produit]({link})",
+                    color=discord.Color.orange()
+                )
+                await channel.send(embed=embed)
 
-            if "précommande" in title.lower() or "pré-commande" in title.lower():
-                if title not in known_products:
-                    known_products.append(title)
-                    embed = discord.Embed(
-                        title="Nouvelle Précommande Pokémon TCG sur Amazon",
-                        description=f"**{title}**\n[Voir le produit]({link})",
-                        color=discord.Color.orange()
-                    )
-                    await channel.send(embed=embed)
-
-keep_alive()
 bot.run(TOKEN)
